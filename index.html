@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golf Game</title>
+    <link rel="stylesheet" href="src/css/style.css">
+    <link rel="stylesheet" href="src/css/mobile.css">
+    <!-- Load jQuery first -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Load Konva -->
+    <script src="https://unpkg.com/konva@9/konva.min.js"></script>
+    <!-- Load game scripts in dependency order -->
+    <script src="src/js/utils.js"></script>
+    <script src="src/js/physics.js"></script>
+    <script src="src/js/ball.js"></script>
+    <script src="src/js/level.js"></script>
+    <script src="src/js/hole.js"></script>
+    <script src="src/js/obstacles.js"></script>
+    <script src="src/js/collision.js"></script>
+    <script src="src/js/input.js"></script>
+    <script src="src/js/game.js"></script>
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-canvas"></div>
+        <div id="ui-overlay">
+            <div id="power-meter">
+                <div class="fill"></div>
+            </div>
+            <div id="angle-indicator">Angle: 0°</div>
+            <div id="score">Level: 1 | Shots: 0 | Par: 0</div>
+        </div>
+    </div>
+    <script>
+        $(document).ready(function() {
+            // Initialize the game
+            window.golfGame = new GolfGame();
+            window.golfGame.init();
+        });
+    </script>
+</body>
+</html>
+

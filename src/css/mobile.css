@@ -1,0 +1,72 @@
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+}
+
+h1 {
+    font-size: 24px;
+    text-align: center;
+    color: #333;
+}
+
+.button {
+    display: inline-block;
+    padding: 10px 20px;
+    margin: 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.button:hover {
+    background-color: #45a049;
+}
+
+@media (max-width: 600px) {
+    h1 {
+        font-size: 20px;
+    }
+
+    .button {
+        font-size: 14px;
+        padding: 8px 16px;
+    }
+}
+
+@media (max-width: 768px) {
+    #ui-overlay {
+        font-size: 16px;
+    }
+    
+    #power-meter {
+        width: 150px;
+        height: 15px;
+    }
+    
+    body {
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+    #ui-overlay {
+        font-size: 14px;
+    }
+    
+    #power-meter {
+        width: 120px;
+        height: 12px;
+    }
+}
