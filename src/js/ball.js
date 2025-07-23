@@ -13,6 +13,12 @@ class Ball {
         this.maxTrailLength = 10; // Maximum number of trail points
         this.trailUpdateCounter = 0;
         this.trailUpdateFrequency = 2; // Add trail point every 3 frames
+
+        // Resting state properties
+        this.isResting = false;
+        this.restThreshold = 0.1; // Velocity below this = at rest
+        this.restFrames = 0;
+        this.restFramesRequired = 10; // Must be slow for this many frames
     }
 
     update() {
@@ -31,6 +37,7 @@ class Ball {
         }
 
         this.updateTrail();
+        this.checkForRest();
     }
 
     // Set velocity for the ball
@@ -38,6 +45,8 @@ class Ball {
         this.velocityX = vx;
         this.velocityY = vy;
         this.isMoving = true;
+        this.isResting = false;
+        this.restFrames = 0;
         this.clearTrail(); // Clear old trail when starting new shot
     }
 
@@ -97,6 +106,24 @@ class Ball {
             top: this.y - this.radius,
             bottom: this.y + this.radius
         };
+   }
+
+    // Check if the ball should be considered at rest
+    checkForRest() {
+        const totalVelocity = Math.sqrt(this.velocityX * this.velocityX + this.velocityY * this.velocityY);
+        
+        if (totalVelocity < this.restThreshold) {
+            this.restFrames++;
+            if (this.restFrames >= this.restFramesRequired) {
+                this.isResting = true;
+                this.velocityX = 0;
+                this.velocityY = 0;
+                this.isMoving = false;
+            }
+        } else {
+            this.restFrames = 0;
+            this.isResting = false;
+        }
     }
 
     draw(context) {

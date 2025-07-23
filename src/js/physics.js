@@ -41,31 +41,37 @@ class Physics {
 
     // Update ball physics
     updateBall(ball) {
-        if (!ball.isMoving) return;
-
-        // Apply forces
-        this.applyGravity(ball);
-        this.applyAirResistance(ball);
-
+        if (ball.isResting) return; // Don't update resting balls
+    
+        // Apply gravity
+        ball.velocityY += this.gravity;
+    
+        // Apply air resistance
+        ball.velocityX *= this.airResistance;
+        ball.velocityY *= this.airResistance;
+    
         // Update position
         ball.x += ball.velocityX;
         ball.y += ball.velocityY;
-
-        // Handle ground collision
-        this.handleGroundCollision(ball);
-
-        // Apply friction if on ground
-        if (ball.y >= this.groundY - ball.radius) {
-            this.applyFriction(ball);
+    
+        // Ground collision
+        if (ball.y + ball.radius >= this.groundY) {
+            ball.y = this.groundY - ball.radius;
+            ball.velocityY *= -this.bounceReduction;
+            ball.velocityX *= this.friction;
+            
+            // Stop tiny bounces
+            if (Math.abs(ball.velocityY) < 1) {
+                ball.velocityY = 0;
+            }
         }
-
-        // Stop ball if velocity is very low
-        if (Math.abs(ball.velocityX) < 0.1 && Math.abs(ball.velocityY) < 0.1 && 
-            ball.y >= this.groundY - ball.radius) {
-            ball.velocityX = 0;
-            ball.velocityY = 0;
-            ball.isMoving = false;
-        }
+    
+        // Check if ball should rest
+        ball.checkForRest();
+    
+        // Update moving state
+        const totalVelocity = Math.sqrt(ball.velocityX * ball.velocityX + ball.velocityY * ball.velocityY);
+        ball.isMoving = totalVelocity > 0.1 && !ball.isResting;
     }
 
     // Calculate trajectory for aiming preview

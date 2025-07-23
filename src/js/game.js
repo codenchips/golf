@@ -32,6 +32,9 @@ $(document).ready(function() {
             // Level bounds
             this.minLevelLength = 1200;
             this.maxLevelLength = 4000;
+
+            // In the constructor, create collision detector
+            this.collisionDetector = null;
         }
 
         init() {
@@ -52,6 +55,9 @@ $(document).ready(function() {
             this.physics = new Physics();
             this.ball = new Ball(100, this.physics.groundY - 8);
             this.inputHandler = new InputHandler(this);
+
+            // Create collision detector
+            this.collisionDetector = new CollisionDetector(this.physics);
 
             // Load first level
             this.loadLevel(this.currentLevel);
@@ -204,21 +210,15 @@ $(document).ready(function() {
         update() {
             if (!this.isRunning) return;
 
-            // Update physics
+            // Update physics (this will skip resting balls)
             this.physics.updateBall(this.ball);
 
-            // Update ball trail
-            this.ball.updateTrail();
-
-            // Update ball visual position
-            this.ballVisual.x(this.ball.x);
-            this.ballVisual.y(this.ball.y);
-
-            // Update trail visual
-            this.updateTrailVisual();
-
-            // Camera follow ball but stop at putting area
+            // Only update trail and visuals if ball is moving
             if (this.ball.isMoving) {
+                this.ball.updateTrail();
+                this.updateTrailVisual();
+                
+                // Camera follow
                 this.camera.x = Math.min(
                     this.ball.x - window.innerWidth / 4,
                     this.level.puttingAreaStart - window.innerWidth / 2
@@ -226,25 +226,26 @@ $(document).ready(function() {
                 this.gameLayer.x(-this.camera.x);
             }
 
-            // Check collisions
-            if (this.collisionsEnabled) {
+            // Always update ball visual position
+            this.ballVisual.x(this.ball.x);
+            this.ballVisual.y(this.ball.y);
+
+            // Check collisions only if ball is moving
+            if (this.collisionsEnabled && this.ball.isMoving) {
                 this.checkCollisions();
             }
 
-            // Check if ball reached hole
-            if (this.hole && this.hole.checkBallInHole(this.ball)) {
+            // Check hole only if ball is moving slowly (not resting)
+            if (this.hole && !this.ball.isResting && this.hole.checkBallInHole(this.ball)) {
                 this.completeLevel();
             }
 
-            // Check if ball went too far
-            if (this.ball.x > this.level.length + 200 ) {
+            // Check bounds
+            if (this.ball.x > this.level.length + 200) {
                 this.resetBallToStart();
             }
 
-            // Redraw
             this.gameLayer.batchDraw();
-
-            // Continue game loop
             requestAnimationFrame(() => this.update());
         }
 
@@ -298,23 +299,13 @@ $(document).ready(function() {
         }
 
         checkCollisions() {
-            const ballBounds = this.ball.getBounds();
+            if (!this.collisionsEnabled) return;
             
-            for (const obstacle of this.obstacles) {
-                if (ballBounds.right > obstacle.x && 
-                    ballBounds.left < obstacle.x + obstacle.width &&
-                    ballBounds.bottom > obstacle.y && 
-                    ballBounds.top < obstacle.y + obstacle.height) {
-                
-                    if (obstacle.type === 'tower') {
-                        this.handleTowerCollision(obstacle);
-                    } else if (obstacle.type === 'water') {
-                        // Ball stops in water - reset to start
-                        this.resetBallToStart();
-                    } else if (obstacle.type === 'ramp') {
-                        this.handleRampCollision(obstacle);
-                    }
-                }
+            const result = this.collisionDetector.checkCollisions(this.ball, this.obstacles);
+            
+            // Handle special collision results
+            if (result === 'reset') {
+                this.resetBallToStart();
             }
         }
 
@@ -363,30 +354,98 @@ $(document).ready(function() {
             if (Math.abs(ball.velocityY) < 0.5) ball.velocityY = 0;
         }
 
-        handleRampCollision(obstacle) {
-            const ball = this.ball;
-            
-            // Calculate ramp angle (assuming ramp slopes up from left to right)
-            const rampAngle = Math.atan2(-obstacle.height, obstacle.width);
-            
-            // Get ball velocity magnitude
-            const speed = Math.sqrt(ball.velocityX * ball.velocityX + ball.velocityY * ball.velocityY);
-            
-            // Calculate reflection angle
-            const incomingAngle = Math.atan2(ball.velocityY, ball.velocityX);
-            const normalAngle = rampAngle + Math.PI / 2; // Perpendicular to ramp surface
-            const reflectedAngle = 2 * normalAngle - incomingAngle;
-            
-            // Apply reflected velocity with energy loss
-            const energyRetention = 0.8;
-            ball.velocityX = Math.cos(reflectedAngle) * speed * energyRetention;
-            ball.velocityY = Math.sin(reflectedAngle) * speed * energyRetention;
-            
-            // Position ball slightly away from ramp
-            const pushDistance = ball.radius + 2;
-            ball.x += Math.cos(normalAngle) * pushDistance;
-            ball.y += Math.sin(normalAngle) * pushDistance;
+    handleRampCollision(obstacle) {
+        const ball = this.ball;
+        
+        // Calculate ball speed
+        const speed = Math.sqrt(ball.velocityX * ball.velocityX + ball.velocityY * ball.velocityY);
+        
+        // Calculate ramp angle (assuming ramp slopes up from left to right)
+        const rampAngle = Math.atan2(-obstacle.height, obstacle.width);
+        const rampSlope = Math.tan(rampAngle);
+        
+        // Determine which side of ramp the ball hit
+        const ballRelativeX = ball.x - obstacle.x;
+        const rampHeightAtBall = obstacle.y + obstacle.height - (ballRelativeX / obstacle.width) * obstacle.height;
+        
+        // Position ball on ramp surface
+        ball.y = rampHeightAtBall - ball.radius;
+        
+        // Speed threshold for bouncing vs rolling
+        const bounceThreshold = 8; // Fast balls bounce, slow balls roll
+        
+        if (speed > bounceThreshold) {
+            // Fast ball - bounce off ramp
+            this.handleRampBounce(ball, rampAngle, speed);
+        } else {
+            // Slow ball - roll up/down ramp
+            this.handleRampRoll(ball, rampAngle, rampSlope, obstacle);
         }
+    }
+
+    handleRampBounce(ball, rampAngle, speed) {
+        // Calculate incoming angle
+        const incomingAngle = Math.atan2(ball.velocityY, ball.velocityX);
+        
+        // Calculate normal to ramp surface
+        const normalAngle = rampAngle + Math.PI / 2;
+        
+        // Reflect velocity off the ramp
+        const reflectedAngle = 2 * normalAngle - incomingAngle;
+        
+        // Apply reflected velocity with some energy loss
+        const energyRetention = 0.7;
+        ball.velocityX = Math.cos(reflectedAngle) * speed * energyRetention;
+        ball.velocityY = Math.sin(reflectedAngle) * speed * energyRetention;
+        
+        // Ensure ball bounces upward if it was going down
+        if (ball.velocityY > 0) {
+            ball.velocityY = -Math.abs(ball.velocityY);
+        }
+    }
+
+    handleRampRoll(ball, rampAngle, rampSlope, obstacle) {
+        // Convert horizontal velocity to velocity along the ramp
+        const rampDirection = Math.sign(ball.velocityX); // 1 for right, -1 for left
+        
+        // Calculate velocity component along the ramp
+        const velocityAlongRamp = ball.velocityX * Math.cos(rampAngle) + ball.velocityY * Math.sin(rampAngle);
+        
+        // Apply gravity component along the ramp
+        const gravityAlongRamp = this.physics.gravity * Math.sin(rampAngle);
+        
+        // Rolling friction
+        const rollingFriction = 0.95;
+        
+        // Update velocity along ramp (considering gravity pulling down the slope)
+        let newVelocityAlongRamp = velocityAlongRamp * rollingFriction;
+        
+        // Add gravity component (positive = down the ramp, negative = up the ramp)
+        if (rampDirection > 0) {
+            // Ball moving right (up the ramp) - gravity slows it down
+            newVelocityAlongRamp -= gravityAlongRamp * 0.3;
+        } else {
+            // Ball moving left (down the ramp) - gravity speeds it up
+            newVelocityAlongRamp += gravityAlongRamp * 0.3;
+        }
+        
+        // Convert back to x,y components
+        ball.velocityX = newVelocityAlongRamp * Math.cos(rampAngle);
+        ball.velocityY = newVelocityAlongRamp * Math.sin(rampAngle);
+        
+        // If ball is moving very slowly, let it settle on the ramp
+        if (Math.abs(newVelocityAlongRamp) < 0.5) {
+            ball.velocityX *= 0.8;
+            ball.velocityY = 0; // Stop vertical movement when settled
+        }
+        
+        // Ensure ball stays on ramp surface
+        const ballRelativeX = ball.x - obstacle.x;
+        if (ballRelativeX >= 0 && ballRelativeX <= obstacle.width) {
+            const rampHeightAtBall = obstacle.y + obstacle.height - (ballRelativeX / obstacle.width) * obstacle.height;
+            ball.y = Math.min(ball.y, rampHeightAtBall - ball.radius);
+        }
+    }
 
         completeLevel() {
             if (this.levelComplete) return; // Prevent multiple calls
