@@ -162,7 +162,7 @@ $(document).ready(function() {
         }
 
         createHole() {
-            const holeData = this.level.createHole(this.physics.groundY);
+            const holeData = this.level.createHole(this.physics.groundY); // Pass the actual ground Y
             this.hole = new Hole(holeData.x, holeData.y, holeData.radius);
             
             const holeVisuals = this.hole.createVisual();
@@ -232,7 +232,7 @@ $(document).ready(function() {
             }
 
             // Check if ball reached hole
-            if (this.hole.checkBallInHole(this.ball)) {
+            if (this.hole && this.hole.checkBallInHole(this.ball)) {
                 this.completeLevel();
             }
 
@@ -307,38 +307,85 @@ $(document).ready(function() {
                     ballBounds.top < obstacle.y + obstacle.height) {
                 
                     if (obstacle.type === 'tower') {
-                        // Determine which side of the obstacle the ball hit
-                        const ballCenterX = this.ball.x;
-                        const obstacleCenterX = obstacle.x + obstacle.width / 2;
-                        
-                        if (ballCenterX < obstacleCenterX) {
-                            // Ball hit from the left side
-                            this.ball.velocityX *= -0.5;
-                            this.ball.x = obstacle.x - this.ball.radius - 1;
-                        } else {
-                            // Ball hit from the right side
-                            this.ball.velocityX *= -0.5;
-                            this.ball.x = obstacle.x + obstacle.width + this.ball.radius + 1;
-                        }
-                        
-                        // Add some vertical bounce for more realistic physics
-                        if (Math.abs(this.ball.velocityY) < 1) {
-                            this.ball.velocityY = -2; // Small upward bounce
-                        }
-                        
+                        this.handleTowerCollision(obstacle);
                     } else if (obstacle.type === 'water') {
                         // Ball stops in water - reset to start
                         this.resetBallToStart();
                     } else if (obstacle.type === 'ramp') {
-                        // Handle ramp collision (ball bounces up the ramp)
-                        const rampAngle = Math.atan2(-obstacle.height, obstacle.width);
-                        const speed = Math.sqrt(this.ball.velocityX * this.ball.velocityX + this.ball.velocityY * this.ball.velocityY);
-                        
-                        this.ball.velocityX = speed * Math.cos(rampAngle) * 0.8;
-                        this.ball.velocityY = speed * Math.sin(rampAngle) * 0.8;
+                        this.handleRampCollision(obstacle);
                     }
                 }
             }
+        }
+
+        handleTowerCollision(obstacle) {
+            const ball = this.ball;
+            
+            // Calculate overlap on each axis
+            const overlapLeft = (ball.x + ball.radius) - obstacle.x;
+            const overlapRight = (obstacle.x + obstacle.width) - (ball.x - ball.radius);
+            const overlapTop = (ball.y + ball.radius) - obstacle.y;
+            const overlapBottom = (obstacle.y + obstacle.height) - (ball.y - ball.radius);
+            
+            // Find the minimum overlap to determine collision direction
+            const minOverlapX = Math.min(overlapLeft, overlapRight);
+            const minOverlapY = Math.min(overlapTop, overlapBottom);
+            
+            // Apply collision response based on smallest overlap
+            if (minOverlapX < minOverlapY) {
+                // Horizontal collision (side impact)
+                if (overlapLeft < overlapRight) {
+                    // Hit left side of obstacle
+                    ball.x = obstacle.x - ball.radius - 1;
+                    ball.velocityX = Math.abs(ball.velocityX) * -0.7; // Bounce left with energy loss
+                } else {
+                    // Hit right side of obstacle
+                    ball.x = obstacle.x + obstacle.width + ball.radius + 1;
+                    ball.velocityX = Math.abs(ball.velocityX) * 0.7; // Bounce right with energy loss
+                }
+            } else {
+                // Vertical collision (top/bottom impact)
+                if (overlapTop < overlapBottom) {
+                    // Hit top of obstacle - ball bounces up and continues horizontal motion
+                    ball.y = obstacle.y - ball.radius - 1;
+                    ball.velocityY = Math.abs(ball.velocityY) * -0.8; // Bounce up with some energy loss
+                    ball.velocityX *= 0.9; // Slight horizontal friction but maintain direction
+                } else {
+                    // Hit bottom of obstacle (rare case)
+                    ball.y = obstacle.y + obstacle.height + ball.radius + 1;
+                    ball.velocityY = Math.abs(ball.velocityY) * 0.8; // Bounce down
+                    ball.velocityX *= 0.9; // Slight horizontal friction
+                }
+            }
+            
+            // Ensure minimum bounce velocity for realistic physics
+            if (Math.abs(ball.velocityX) < 0.5) ball.velocityX = 0;
+            if (Math.abs(ball.velocityY) < 0.5) ball.velocityY = 0;
+        }
+
+        handleRampCollision(obstacle) {
+            const ball = this.ball;
+            
+            // Calculate ramp angle (assuming ramp slopes up from left to right)
+            const rampAngle = Math.atan2(-obstacle.height, obstacle.width);
+            
+            // Get ball velocity magnitude
+            const speed = Math.sqrt(ball.velocityX * ball.velocityX + ball.velocityY * ball.velocityY);
+            
+            // Calculate reflection angle
+            const incomingAngle = Math.atan2(ball.velocityY, ball.velocityX);
+            const normalAngle = rampAngle + Math.PI / 2; // Perpendicular to ramp surface
+            const reflectedAngle = 2 * normalAngle - incomingAngle;
+            
+            // Apply reflected velocity with energy loss
+            const energyRetention = 0.8;
+            ball.velocityX = Math.cos(reflectedAngle) * speed * energyRetention;
+            ball.velocityY = Math.sin(reflectedAngle) * speed * energyRetention;
+            
+            // Position ball slightly away from ramp
+            const pushDistance = ball.radius + 2;
+            ball.x += Math.cos(normalAngle) * pushDistance;
+            ball.y += Math.sin(normalAngle) * pushDistance;
         }
 
         completeLevel() {

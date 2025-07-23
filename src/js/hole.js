@@ -10,14 +10,14 @@ class Hole {
     }
 
     createVisual() {
-        // Create hole as a semi-circle using Arc
+        // Create hole as a semi-circle using Arc - positioned so top edge is at ground level
         this.visual = new Konva.Arc({
             x: this.x,
-            y: this.y +6, // Ground level
+            y: this.y, // This.y is now the physics ground level
             innerRadius: 0,
             outerRadius: this.radius,
             angle: 180, // Semi-circle (180 degrees)
-            rotation: 0, // Start from top
+            rotation: 0, // No rotation - semicircle naturally opens upward
             fill: '#000000',
             stroke: '#333333',
             strokeWidth: 2
@@ -26,23 +26,25 @@ class Hole {
         // Create flag positioned at the center of the hole
         this.flagVisual = new Konva.Group();
         
-        // Flag pole - centered in hole, bottom at hole bottom
-        const poleHeight = 55; // 10% longer (was 50)
+        // Flag pole - centered in hole, bottom at ground level
+        const poleHeight = 55;
         const pole = new Konva.Line({
             points: [
                 this.x, this.y, // Bottom of pole at ground level
-                this.x, this.y - poleHeight // Top of pole
+                this.x, this.y - poleHeight // Top of pole extends upward
             ],
             stroke: '#8B4513',
             strokeWidth: 3
         });
         
-        // Flag - centered above the hole
+        // Flag - right edge aligned with pole
+        const flagWidth = 30;
+        const flagHeight = 20;
         const flag = new Konva.Rect({
-            x: this.x, // Centered on hole
-            y: this.yl - poleHeight, // At top of pole
-            width: 30,
-            height: 20,
+            x: this.x - flagWidth, // Right edge of flag aligns with pole
+            y: this.y - poleHeight, // Position at top of pole
+            width: flagWidth,
+            height: flagHeight,
             fill: '#FF0000',
             stroke: '#800000',
             strokeWidth: 1
@@ -62,11 +64,11 @@ class Hole {
         
         const distance = Utils.distance(ball.x, ball.y, this.x, this.y);
         
-        // Ball must be close to hole center and at ground level, moving slowly
-        if (distance < this.radius - ball.radius && 
-            ball.y >= this.y - 5 && // Ball must be at or near ground level
-            Math.abs(ball.velocityX) < 3 && 
-            Math.abs(ball.velocityY) < 3) {
+        // Ball must be close to hole center - more lenient distance check
+        if (distance < (this.radius - ball.radius/2) && 
+            ball.y >= this.y - 8 && // Ball must be at or near ground level (more lenient)
+            Math.abs(ball.velocityX) < 5 && 
+            Math.abs(ball.velocityY) < 5) {
             
             // Ball falls into hole - animate drop to bottom
             this.dropBallInHole(ball);
@@ -93,7 +95,7 @@ class Hole {
 
     animateBallDrop(ball) {
         const startY = ball.y;
-        const endY = this.y + this.holeDepth; // Bottom of hole
+        const endY = this.y + this.holeDepth; // Bottom of hole is ground level + depth
         const dropDuration = 500; // 500ms animation
         const startTime = Date.now();
         

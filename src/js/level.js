@@ -67,7 +67,7 @@ class Level {
     createHole(groundY) {
         this.hole = {
             x: this.holePosition,
-            y: groundY - 5,
+            y: groundY, // Use the actual physics ground level
             radius: 20,
             type: 'hole'
         };
